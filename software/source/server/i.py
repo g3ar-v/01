@@ -296,9 +296,7 @@ def configure_interpreter(interpreter: OpenInterpreter):
 
     from platformdirs import user_data_dir
 
-    os.environ["TOGETHERAI_API_KEY"] = (
-        "e53a18371b4e22c950a3dc816104eb11990490adbbc4c02adf4ee8f4fc702385"
-    )
+    
     # Directory paths
     repo_skills_dir = os.path.join(os.path.dirname(__file__), "skills")
     user_data_skills_dir = os.path.join(user_data_dir("01"), "skills")
