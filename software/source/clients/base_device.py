@@ -1,3 +1,4 @@
+import re
 from dotenv import load_dotenv
 
 load_dotenv()  # take environment variables from .env.
@@ -11,6 +12,7 @@ import json
 import traceback
 import websockets
 import queue
+import subprocess
 from pydub import AudioSegment
 from pydub.playback import play
 import time
@@ -32,10 +34,13 @@ from ..server.utils.process_utils import kill_process_tree
 from ..server.utils.logs import setup_logging
 from ..server.utils.logs import logger
 
+from RealtimeSTT import AudioToTextRecorder
+from RealtimeTTS import OpenAIEngine, TextToAudioStream
+
 setup_logging()
 
-os.environ["STT_RUNNER"] = "server"
-os.environ["TTS_RUNNER"] = "server"
+# os.environ["STT_RUNNER"] = "client"
+# os.environ["TTS_RUNNER"] = "client"
 
 from ..utils.accumulator import Accumulator
 
@@ -66,12 +71,57 @@ p = pyaudio.PyAudio()
 send_queue = queue.Queue()
 
 
+def beep(sound):
+    try:
+        subprocess.Popen(["afplay", f"/System/Library/Sounds/{sound}.aiff"])
+    except:
+        pass  # No big deal
+
+
+def find_input_device(device_name):
+    """Find audio input device by name.
+
+    Args:
+        device_name: device name or regex pattern to match
+
+    Returns: device_index (int) or None if device wasn't found
+    """
+    print("Searching for input device: {}".format(device_name))
+    print("Devices: ")
+    pa = pyaudio.PyAudio()
+    pattern = re.compile(device_name)
+    for device_index in range(pa.get_device_count()):
+        dev = pa.get_device_info_by_index(device_index)
+        print("   {}".format(dev["name"]))
+        if dev["maxInputChannels"] > 0 and pattern.match(dev["name"]):
+            print("    ^-- matched")
+            return device_index
+    return None
+
+
 class Device:
     def __init__(self):
         self.pressed_keys = set()
         self.captured_images = []
         self.audiosegments = []
         self.server_url = ""
+        device_index = find_input_device("MacBook Pro Microphone")
+        self.recorder = AudioToTextRecorder(
+            spinner=False,
+            model="base.en",
+            language="en",
+            input_device_index=device_index,
+        )
+        self.recorder.stop()
+        engine = OpenAIEngine()
+        self.stream = TextToAudioStream(engine)
+
+        def welcome():
+            yield "Hi, how can I help you?"
+
+        beep("blow")
+        self.stream.feed(welcome())
+        self.stream.play_async()
 
     def fetch_image_from_camera(self, camera_index=CAMERA_DEVICE_INDEX):
         """Captures an image from the specified camera device and saves it to a temporary file. Adds the image to the captured_images list."""
@@ -166,7 +216,9 @@ class Device:
             frames_per_buffer=CHUNK,
         )
         print("Recording started...")
+        beep("Morse")
         global RECORDING
+        self.recorder.start()
 
         # Create a temporary WAV file to store the audio data
         temp_dir = tempfile.gettempdir()
@@ -182,9 +234,11 @@ class Device:
             data = stream.read(CHUNK, exception_on_overflow=False)
             wav_file.writeframes(data)
 
+        beep("Frog")
         wav_file.close()
         stream.stop_stream()
         stream.close()
+        self.recorder.stop()
         print("Recording stopped.")
 
         duration = wav_file.getnframes() / RATE
@@ -214,12 +268,9 @@ class Device:
             self.queue_all_captured_images()
 
             if os.getenv("STT_RUNNER") == "client":
-                # THIS DOES NOT WORK. We moved to this very cool stt_service, llm_service
-                # way of doing things. stt_wav is not a thing anymore. Needs work to work
-
                 # Run stt then send text
-                text = stt_wav(wav_path)
-                logger.debug(f"STT result: {text}")
+                text = self.recorder.text()
+                logger.info(f"STT: {text}")
                 send_queue.put({"role": "user", "type": "message", "content": text})
                 send_queue.put({"role": "user", "type": "message", "end": True})
             else:
@@ -257,12 +308,12 @@ class Device:
         """Detect spacebar press and Ctrl+C combination."""
         self.pressed_keys.add(key)  # Add the pressed key to the set
 
-        if keyboard.Key.space in self.pressed_keys:
+        if {keyboard.Key.cmd_r, keyboard.KeyCode.from_char("l")} <= self.pressed_keys:
             self.toggle_recording(True)
-        elif {keyboard.Key.ctrl, keyboard.KeyCode.from_char("c")} <= self.pressed_keys:
-            logger.info("Ctrl+C pressed. Exiting...")
-            kill_process_tree()
-            os._exit(0)
+        # elif {keyboard.Key.ctrl, keyboard.KeyCode.from_char("c")} <= self.pressed_keys:
+        #     logger.info("Ctrl+C pressed. Exiting...")
+        #     kill_process_tree()
+        #     os._exit(0)
 
     def on_release(self, key):
         """Detect spacebar release and 'c' key press for camera, and handle key release."""
@@ -270,7 +321,7 @@ class Device:
             key
         )  # Remove the released key from the key press tracking set
 
-        if key == keyboard.Key.space:
+        if key == keyboard.KeyCode.from_char("l"):
             self.toggle_recording(False)
         elif CAMERA_ENABLED and key == keyboard.KeyCode.from_char("c"):
             self.fetch_image_from_camera()
@@ -296,7 +347,9 @@ class Device:
                     "\nHold the spacebar to start recording. Press 'c' to capture an image from the camera. Press CTRL-C to exit."
                 )
             else:
-                print("\nHold the spacebar to start recording. Press CTRL-C to exit.")
+                print(
+                    "\nHold the push-to-talk button to start recording. Press CTRL-C to exit."
+                )
 
             asyncio.create_task(self.message_sender(websocket))
 
@@ -342,6 +395,11 @@ class Device:
                         code = message["content"]
                         result = interpreter.computer.run(language, code)
                         send_queue.put(result)
+
+                if os.getenv("TTS_RUNNER") == "client":
+                    if message["type"] == "message":
+                        self.stream.feed(message["content"])
+                        self.stream.play_async()
 
         if is_win10():
             logger.info("Windows 10 detected")

@@ -66,7 +66,7 @@ def run(
         "openai", "--tts-service", help="Specify the TTS service"
     ),
     stt_service: str = typer.Option(
-        "openai", "--stt-service", help="Specify the STT service"
+        "python-whisper", "--stt-service", help="Specify the STT service"
     ),
     local: bool = typer.Option(
         False, "--local", help="Use recommended local services for LLM, STT, and TTS"
@@ -106,14 +106,14 @@ def _run(
     server_url: str = None,
     client_type: str = "auto",
     llm_service: str = "litellm",
-    model: str = "gpt-4",
+    model: str = "together_ai/meta-llama/Llama-3-70b-chat-hf",
     llm_supports_vision: bool = False,
     llm_supports_functions: bool = False,
     context_window: int = 2048,
     max_tokens: int = 4096,
     temperature: float = 0.8,
     tts_service: str = "openai",
-    stt_service: str = "openai",
+    stt_service: str = "python-whisper",
     local: bool = False,
     qr: bool = False,
 ):

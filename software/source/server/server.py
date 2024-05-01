@@ -1,6 +1,5 @@
 from dotenv import load_dotenv
 
-load_dotenv()  # take environment variables from .env.
 
 import traceback
 from platformdirs import user_data_dir
@@ -23,8 +22,12 @@ from .utils.logs import logger
 
 from ..utils.print_markdown import print_markdown
 
-os.environ["STT_RUNNER"] = "server"
-os.environ["TTS_RUNNER"] = "server"
+# os.environ["STT_RUNNER"] = "server"
+# os.environ["TTS_RUNNER"] = "server"
+
+load_dotenv()  # take environment variables from .env.
+print("STT_RUNNER:", os.getenv("STT_RUNNER", "server"))
+print("TTS_RUNNER:", os.getenv("TTS_RUNNER", "server"))
 
 markdown = """
 ○
@@ -58,9 +61,7 @@ def split_into_sentences(text):
 
 
 # Queues
-from_computer = (
-    queue.Queue()
-)  # Just for computer messages from the device. Sync queue because interpreter.run is synchronous
+from_computer = queue.Queue()  # Just for computer messages from the device. Sync queue because interpreter.run is synchronous
 from_user = asyncio.Queue()  # Just for user messages from the device.
 to_device = asyncio.Queue()  # For messages we send.
 
@@ -174,6 +175,7 @@ async def receive_messages(websocket: WebSocket):
                         from_computer.put(
                             data
                         )  # To be handled by interpreter.computer.run
+                        logger.info("data from computer: ", data)
                     elif data["role"] == "user":
                         await from_user.put(data)
                     else:
@@ -215,9 +217,11 @@ async def listener():
             while True:
                 if not from_user.empty():
                     chunk = await from_user.get()
+                    logger.info("message from user: ", chunk)
                     break
                 elif not from_computer.empty():
                     chunk = from_computer.get()
+                    logger.info("message from computer: ", chunk)
                     break
                 await asyncio.sleep(1)
 
@@ -279,6 +283,7 @@ async def listener():
                 interpreter.llm.model = "gpt-4-vision-preview"
                 interpreter.llm.supports_vision = True
 
+            logger.info("message: ", message)
             for chunk in interpreter.chat(messages, stream=True, display=True):
                 if any([m["type"] == "image" for m in interpreter.messages]):
                     interpreter.llm.model = "gpt-4-vision-preview"
@@ -363,11 +368,14 @@ async def stream_tts_to_device(sentence):
         "the task is impossible",
         "let me know what you'd like to do next",
     ]
-    if sentence.lower().strip().strip(".!?").strip() in force_task_completion_responses:
-        return
+    # if sentence.lower().strip().strip(".!?").strip() in force_task_completion_responses:
+    #     return
 
     for chunk in stream_tts(sentence):
         await to_device.put(chunk)
+    # await to_device.put({"role": "assistant", "type": "message", "start": True})
+    # await to_device.put({"role": "assistant", "type": "message", "content": True})
+    # await to_device.put({"role": "assistant", "type": "message", "end": True})
 
 
 def stream_tts(sentence):
@@ -460,6 +468,11 @@ async def main(
                     "temperature": temperature,
                 }
             )
+
+        if os.getenv("STT_RUNNER") == "client" or os.getenv("TTS_RUNNER") == "client":
+            if service in ("tts", "stt"):
+                print("not loading", service)
+                continue
 
         module = import_module(
             f".server.services.{service}.{service_dict[service]}.{service}",

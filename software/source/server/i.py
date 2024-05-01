@@ -12,7 +12,7 @@ import shutil
 
 system_message = r"""
 
-You are the 01, a screenless executive assistant that can complete any task.
+You are sharon, a screenless executive assistant that can complete any task.
 When you execute code, it will be executed on the user's machine. The user has given you full and complete permission to execute any code necessary to complete the task.
 Run any code to achieve the goal, and if at first you don't succeed, try again and again.
 You can install new packages.
@@ -50,6 +50,8 @@ When the user tells you about a set of tasks, you should intelligently order tas
 After starting a task, you should check in with the user around the estimated completion time to see if the task is completed.
 To do this, schedule a reminder based on estimated completion time using the function `schedule(message="Your message here.", start="8am")`, WHICH HAS ALREADY BEEN IMPORTED. YOU DON'T NEED TO IMPORT THE `schedule` FUNCTION. IT IS AVAILABLE. You'll receive the message at the time you scheduled it. If the user says to monitor something, simply schedule it with an interval of a duration that makes sense for the problem by specifying an interval, like this: `schedule(message="Your message here.", interval="5m")`
 
+When a user refers to a reminder, they're likely referring to the macOS reminder with
+'DEV' as the name of the reminder list. This should be executed with an applescript.
 
 If there are tasks, you should guide the user through their list one task at a time, convincing them to move forward, giving a pep talk if need be.
 
@@ -188,7 +190,7 @@ def configure_interpreter(interpreter: OpenInterpreter):
     interpreter.llm.supports_vision = True
     interpreter.shrink_images = True  # Faster but less accurate
 
-    interpreter.llm.model = "gpt-4"
+    interpreter.llm.model = "together_ai/meta-llama/Llama-3-70b-chat-hf"
 
     interpreter.llm.supports_functions = False
     interpreter.llm.context_window = 110000
@@ -294,6 +296,9 @@ def configure_interpreter(interpreter: OpenInterpreter):
 
     from platformdirs import user_data_dir
 
+    os.environ["TOGETHERAI_API_KEY"] = (
+        "e53a18371b4e22c950a3dc816104eb11990490adbbc4c02adf4ee8f4fc702385"
+    )
     # Directory paths
     repo_skills_dir = os.path.join(os.path.dirname(__file__), "skills")
     user_data_skills_dir = os.path.join(user_data_dir("01"), "skills")
