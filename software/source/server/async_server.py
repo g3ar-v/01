@@ -7,6 +7,7 @@
 
 # from .profiles.fast import interpreter as base_interpreter
 # from .profiles.local import interpreter as base_interpreter
+from source.server.utils.beeps import beep
 from .profiles.default import interpreter as base_interpreter
 
 import asyncio
@@ -22,6 +23,7 @@ import os
 
 os.environ["STT_RUNNER"] = "server"
 os.environ["TTS_RUNNER"] = "server"
+os.environ["LOG_LEVEL"] = "INFO"
 
 # interpreter.tts set in the profiles directory!!!!
 interpreter = AsyncInterpreter(base_interpreter)
@@ -93,8 +95,11 @@ async def websocket_endpoint(websocket: WebSocket):
 
 async def main(server_host, server_port):
     print(f"Starting server on {server_host}:{server_port}")
-    config = Config(app, host=server_host, port=server_port, lifespan="on")
+    config = Config(
+        app, host=server_host, port=server_port, lifespan="on", log_level="warning"
+    )
     server = Server(config)
+    beep("Blow")
     await server.serve()
 
 

@@ -18,6 +18,10 @@ import time
 import asyncio
 import json
 import os
+from ..server.utils.logs import setup_logging
+from ..server.utils.logs import logger
+
+setup_logging()
 
 
 class AsyncInterpreter:
@@ -27,7 +31,7 @@ class AsyncInterpreter:
 
         # STT
         self.stt = AudioToTextRecorder(
-            model="tiny.en", spinner=False, use_microphone=False
+            model="base.en", spinner=False, use_microphone=False
         )
 
         self.stt.stop()  # It needs this for some reason
@@ -40,6 +44,7 @@ class AsyncInterpreter:
         elif self.interpreter.tts == "elevenlabs":
             engine = ElevenlabsEngine(api_key=os.environ["ELEVEN_LABS_API_KEY"])
             engine.set_voice("Michael")
+            # engine.set_voice_parameters(clarity=0.5, stability=1.0)
         else:
             raise ValueError(f"Unsupported TTS engine: {self.interpreter.tts}")
         self.tts = TextToAudioStream(engine)
@@ -78,7 +83,6 @@ class AsyncInterpreter:
             # print("INTERPRETER FEEDING AUDIO")
 
         else:
-
             try:
                 chunk = json.loads(chunk)
             except:
@@ -109,7 +113,6 @@ class AsyncInterpreter:
         # print("message is", message)
 
         for chunk in self.interpreter.chat(message, display=True, stream=True):
-
             if self._last_lmc_start_flag != last_lmc_start_flag:
                 # self.beeper.stop()
                 break
@@ -176,10 +179,10 @@ class AsyncInterpreter:
         if self.audio_chunks:
             audio_bytes = bytearray(b"".join(self.audio_chunks))
             wav_file_path = bytes_to_wav(audio_bytes, "audio/raw")
-            print("wav_file_path ", wav_file_path)
+            logger.info(f"wav_file_path: {wav_file_path}")
             self.audio_chunks = []
 
-        print(message)
+        print(">", message)
 
         # Feed generate to RealtimeTTS
         self.add_to_output_queue_sync(

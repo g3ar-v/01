@@ -27,6 +27,7 @@ from interpreter import (
 )  # Just for code execution. Maybe we should let people do from interpreter.computer import run?
 
 # In the future, I guess kernel watching code should be elsewhere? Somewhere server / client agnostic?
+from ..server.utils.beeps import beep
 from ..server.utils.kernel import put_kernel_messages_into_queue
 from ..server.utils.get_system_info import get_system_info
 from ..server.utils.process_utils import kill_process_tree
@@ -282,15 +283,17 @@ class Device:
             if not RECORDING:
                 RECORDING = True
                 threading.Thread(target=self.record_audio).start()
+                beep("Morse")
         elif not state and SPACEBAR_PRESSED:
             SPACEBAR_PRESSED = False
             RECORDING = False
+            beep("Frog")
 
     def on_press(self, key):
         """Detect spacebar press and Ctrl+C combination."""
         self.pressed_keys.add(key)  # Add the pressed key to the set
 
-        if keyboard.Key.space in self.pressed_keys:
+        if keyboard.Key.f8 in self.pressed_keys:
             self.toggle_recording(True)
         elif {keyboard.Key.ctrl, keyboard.KeyCode.from_char("c")} <= self.pressed_keys:
             logger.info("Ctrl+C pressed. Exiting...")
@@ -318,7 +321,7 @@ class Device:
 
         if key == keyboard.Key.ctrl_l:
             self.ctrl_pressed = False
-        if key == keyboard.Key.space:
+        if key == keyboard.Key.f8:
             self.toggle_recording(False)
         elif CAMERA_ENABLED and key == keyboard.KeyCode.from_char("c"):
             self.fetch_image_from_camera()
@@ -344,7 +347,9 @@ class Device:
                     "\nHold the spacebar to start recording. Press 'c' to capture an image from the camera. Press CTRL-C to exit."
                 )
             else:
-                print("\nHold the spacebar to start recording. Press CTRL-C to exit.")
+                print(
+                    "\nHold the push-to-talk to start recording. Press CTRL-C to exit."
+                )
 
             asyncio.create_task(self.message_sender(websocket))
 
@@ -432,9 +437,9 @@ class Device:
         asyncio.create_task(self.websocket_communication(WS_URL))
 
         # Start watching the kernel if it's your job to do that
-        if os.getenv("CODE_RUNNER") == "client":
-            # client is not running code!
-            asyncio.create_task(put_kernel_messages_into_queue(send_queue))
+        # if os.getenv("CODE_RUNNER") == "client":
+        # client is not running code!
+        asyncio.create_task(put_kernel_messages_into_queue(send_queue))
 
         asyncio.create_task(self.play_audiosegments())
 
